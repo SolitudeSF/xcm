@@ -2,7 +2,7 @@
 
 version       = "0.1.0"
 author        = "SolitudeSF"
-description   = "X.org color matrix manipulation"
+description   = "Color management utility for X"
 license       = "MIT"
 srcDir        = "src"
 bin           = @["xcm"]
