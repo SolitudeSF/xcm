@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.1.1"
 author        = "SolitudeSF"
 description   = "Color management utility for X"
 license       = "MIT"
@@ -10,4 +10,4 @@ bin           = @["xcm"]
 
 # Dependencies
 
-requires "nim >= 1.0.0", "https://github.com/SolitudeSF/x11#a33254a5ac0df76786ffdaf9d736add242179964", "cligen >= 0.9.38"
+requires "nim >= 1.0.0", "x11#74cbb2c73be7f4b079b6f4edbadc1d1f00d9af15", "cligen >= 0.9.41"

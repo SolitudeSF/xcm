@@ -4,6 +4,9 @@ import x11/[x, xlib, xrandr, xatom]
 const
   minLut = 1.0 / float(1 shl 10)
   lutSize = 4096
+  propDegamma = "DEGAMMA_LUT"
+  propRegamma = "GAMMA_LUT"
+  propCTM = "CTM"
 
 type
   Color = tuple[r, g, b: float]
@@ -29,12 +32,7 @@ func toCoeffTable(exps: openArray[float]): CoeffTable =
     result[i].g = pow(d, 1 / g)
     result[i].b = pow(d, 1 / b)
 
-func coeffTableZero: CoeffTable = result
-
 func coeffTableMax: CoeffTable =
-  result[0].r = 0.0
-  result[0].g = 0.0
-  result[0].b = 0.0
   for i in 1..result.high:
     result[i].r = 1.0
     result[i].g = 1.0
@@ -45,6 +43,9 @@ func satToMatrix(s: float): array[9, float] =
     l = (1.0 - s) / 3
     h = l + s
   [h, l, l, l, h, l, l, l, h]
+
+func brightToMatrix(s: float): array[9, float] =
+  [s, 0, 0, 0, s, 0, 0, 0, s]
 
 func coeffsToLUT(coeffs: CoeffTable): array[lutSize, DrmLUT] =
   for i in 0..result.high:
@@ -74,13 +75,13 @@ proc setOutputBlob(dpy: PDisplay, output: TRROutput, propName: string,
 
 proc setCTM(dpy: PDisplay, output: TRROutput, coeffs: openArray[float]) =
   let ctm = coeffs.coeffsToCTM
-  var paddedCTM: array[18, int]
+  var paddedCTM: array[DrmCTM.len * 2, int]
   for i in 0..17:
-    paddedCTM[i] = int(cast[array[18, int32]](ctm)[i])
-  setOutputBlob(dpy, output, "CTM", addr paddedCTM, sizeof DrmCTM, randrFormat32bit)
+    paddedCTM[i] = int(cast[array[DrmCTM.len * 2, int32]](ctm)[i])
+  setOutputBlob(dpy, output, propCTM, addr paddedCTM, sizeof DrmCTM, randrFormat32bit)
 
 proc setGamma(dpy: PDisplay, output: TRROutput, coeffs: Option[CoeffTable], isDegamma: bool) =
-  let propName = if isDegamma: "DEGAMMA_LUT" else: "GAMMA_LUT"
+  let propName = if isDegamma: propDegamma else: propRegamma
   if coeffs.isSome:
     let lut = coeffsToLUT(coeffs.get)
     setOutputBlob(dpy, output, propName, unsafeAddr lut, sizeof lut, randrFormat16bit)
@@ -140,6 +141,15 @@ when isMainModule:
     else:
       stderr.writeLine "Expected one saturation value."
 
+  proc brightness(output = "", value: seq[float]) =
+    ## set brightness to specified value
+    if value.len == 1:
+      var (dpy, root, res, outputId) = initX(output)
+      setCTM(dpy, outputId, value[0].brightToMatrix)
+      deinitX(dpy, res)
+    else:
+      stderr.writeLine "Expected one brightness value."
+
   proc degamma(output = "", curve: seq[dgCurve]) =
     ## set degamma
     if curve.len == 1:
@@ -160,7 +170,7 @@ when isMainModule:
     of rgSrgb:
       setGamma(dpy, outputId, none[CoeffTable](), false)
     of rgMin:
-      setGamma(dpy, outputId, some coeffTableZero(), false)
+      setGamma(dpy, outputId, some default CoeffTable, false)
     of rgMax:
       setGamma(dpy, outputId, some coeffTableMax(), false)
     of rgCustom:
@@ -171,8 +181,10 @@ when isMainModule:
     deinitX(dpy, res)
 
   dispatchMulti(
+    ["multi", doc = "Manage display colors of X\n\n"],
     [matrix],
     [saturation],
+    [brightness],
     [degamma],
     [regamma]
   )
